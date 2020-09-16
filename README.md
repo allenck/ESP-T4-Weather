@@ -16,15 +16,17 @@ cmake .
 idf.py menuconfig
 ```
 In the menuconfig page, select "Component config".
-![Menuconfig](/images/menucongig1.png)
+
+![Menuconfig](/images/menuconfig1.png)
 
 Next, select "ESP-T4-Weather Application parameters" then on the following page, enter the appropriate values:
+![Menuconfig](/images/menuconfig2.png)
 1. Your WiFi's SSID and Password. 
 2. Number of times to retry logging on to WiFi.
 3. Your geographic location's latitude and longitude.
 4. The name of your location to be displayed. 
 5. Whether you want values like temperature, wind speed, pressur displayed in Metric or Imperial units.
-6. Your API key that you obtained from regitering at [openweathermap.org[(https://rapidapi.com/blog/lp/openweathermap/?utm_source=google&utm_medium=cpc&utm_campaign=Alpha_105406266670&utm_term=openweathermap%20api%20key_e&gclid=CjwKCAjw74b7BRA_EiwAF8yHFJD58MeQJv75tIp4J3_nOIhGJLisV1r8xSr8woBkAylJIZeBRRui-hoCoB0QAvD_BwE].
+6. Your API key that you obtained from regitering at [openweathermap.org](https://rapidapi.com/blog/lp/openweathermap/?utm_source=google&utm_medium=cpc&utm_campaign=Alpha_105406266670&utm_term=openweathermap%20api%20key_e&gclid=CjwKCAjw74b7BRA_EiwAF8yHFJD58MeQJv75tIp4J3_nOIhGJLisV1r8xSr8woBkAylJIZeBRRui-hoCoB0QAvD_BwE).
 Save and exit menuconfig.
 
 If you use Qt Creator, a Qt Cteator .pro file, "ESP-T4-Weather.pro" is provided.
