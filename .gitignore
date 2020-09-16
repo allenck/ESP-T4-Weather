@@ -3,4 +3,10 @@ sdkconfig.old
 build/
 *.raw
 *.mp4
-
+CMakeFiles/
+bootloader-prefix/
+bootloader/
+cmake_install.cmake
+compile_commands.json
+config/
+kconfig_bin/
