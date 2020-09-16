@@ -1021,4 +1021,6 @@
 			CONFIG_WPA_MBEDTLS_CRYPTO=y 
 
 DISTFILES += \
-    README.md
+    README.md \
+    .gitignore \
+    .gitmodules
