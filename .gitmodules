@@ -1,0 +1,9 @@
+[submodule "components/hagl"]
+	path = components/hagl
+        url = https://github.com/allenck/hagl.git
+[submodule "components/hagl_hal"]
+        path = components/hagl
+        url = https://github.com/allenck/hagl_esp_mipi.git
+[submodule "components/font_render/freetype2"]
+	path = components/font_render/freetype2
+	url = git://git.sv.nongnu.org/freetype/freetype2.git
