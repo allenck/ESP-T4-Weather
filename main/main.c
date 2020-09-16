@@ -103,12 +103,13 @@ cJSON *root = NULL;
 cJSON* weather_array = NULL;
 cJSON* weather =NULL;
 cJSON* hourly = NULL;
-cJSON* hourly_array = NULL;
 cJSON* daily = NULL;
-cJSON* daily_array = NULL;
 
 extern const uint8_t ttf_start[] asm("_binary_Ubuntu_R_ttf_start");
 extern const uint8_t ttf_end[] asm("_binary_Ubuntu_R_ttf_end");
+//extern const uint8_t ttf_start_B[] asm("_binary_Ubuntu_B_ttf_start");
+//extern const uint8_t ttf_end_B[] asm("_binary_Ubuntu_B_ttf_end");
+
 static hagl_driver_t driver;
 
 static font_render_t font_render_10;
@@ -116,6 +117,7 @@ static font_render_t font_render_14;
 static font_render_t font_render_16;
 static font_render_t font_render_24;
 static font_face_t font_face;
+//static font_face_t font_face_B;
 
 #define DRAW_EVENT_START 0xfffc
 #define DRAW_EVENT_END 0xfffd
@@ -132,6 +134,7 @@ static color_t YELLOW;
 static color_t GREEN;
 static color_t RED;
 
+static void DisplayWeather();
 static void Draw_Heading_Section();
 static void Draw_Main_Weather_Section();
 static void DisplayWXicon(int x, int y, char* IconName, bool LargeSize);
@@ -145,6 +148,9 @@ static time_t convertTime(long dt);
 static int currentHour();
 static int getHour(time_t time);
 static void format_time(char* dest, time_t time);
+static void DrawMoon(int x, int y, int dd, int mm, int yy, char* hemisphere);
+static char* MoonPhase(int d, int m, int y);
+static void DrawForecast(int x, int y, int dayIndex);
 
 #define PI 3.1415
 typedef struct draw_event_param {
@@ -156,22 +162,21 @@ typedef struct draw_event_param {
 
 char  *time_str, *Day_time_str; // strings to hold time and received weather data;
 char *ipAddr;
-char * Units = "M";
+#ifdef CONFIG_WEATHER_METRIC_UNITS
+char Units = 'M';
+#else
+char Units = 'I';
+#endif
 int s_retry_num = 0;
 bool connected = false;
 bool    Largesize  = true;
 bool    Smallsize  = false;
 #define Large 7
 #define Small 3
-char * currWeatherIcon;
-char * currentTemperature;
-float windSpeed;
-int windDir;
-float currentRain =0;
-float currentPressure;
-char* pressureTrend="0";
-char* currentDescription;
+char pressureTrend[]="0";
 long tzOffset=0;
+int     wifisection, displaysection, MoonDay, MoonMonth, MoonYear;
+char hemisphere[] = "north";
 
 static bool sntp_time_started = false;
 static bool time_display_started = false;
@@ -269,138 +274,20 @@ esp_err_t _http_event_handle(esp_http_client_event_t *evt)
             ESP_LOGI(TAG, "HTTP_EVENT_ON_FINISH");
             if(root)
             {
-                free(root);
+                cJSON_Delete(root);
             }
             root = cJSON_Parse(jsonBuffer);
             tzOffset = cJSON_GetObjectItem(root, "timezone_offset")->valueint;
             current = cJSON_GetObjectItem(root, "current");
             hourly = cJSON_GetObjectItem(root, "hourly");
             daily = cJSON_GetObjectItem(root, "daily");
-#if 1
-            if(current)
-            {
-                ESP_LOGI(TAG, "current found!");
-                cJSON* dt = cJSON_GetObjectItem(current, "dt");
-                cJSON* temp = cJSON_GetObjectItem(current, "temp");
-                cJSON* humidity = cJSON_GetObjectItem(current, "humidity");
-                cJSON* pressure = cJSON_GetObjectItem(current, "pressure");
-                cJSON* dewPoint = cJSON_GetObjectItem(current, "dew_point");
-                cJSON* wind_speed = cJSON_GetObjectItem(current, "wind_speed");
-                windSpeed = wind_speed->valuedouble;
-                ESP_LOGI(TAG, "currentWindSpeed=%f", windSpeed);
-                cJSON* wind_deg = cJSON_GetObjectItem(current, "wind_deg");
-                windDir = wind_deg->valueint;
-                weather_array = cJSON_GetObjectItem(current, "weather");
-                cJSON* rain = cJSON_GetObjectItem(current, "rain");
-                char *string = NULL;
-//                char16_t message[40];
-                if(temp)
-                {
-                    ESP_LOGI(TAG, "temp found!");
-                    time_t utc;
-                    char* pEnd;
-                    char strftime_buf[64];
-                    struct tm timeinfo;
-                    string = cJSON_Print(dt);
-                    utc = (time_t)strtol(string, &pEnd,10);
-                    localtime_r(&utc, &timeinfo);
-                    strftime(strftime_buf, sizeof(strftime_buf), "%T", &timeinfo);
-                    ESP_LOGI(TAG, "The last report at: %s", strftime_buf);
-//                    swprintf(message, sizeof(message), u"%s    ", strftime_buf);
-//                    hagl_put_text(message, 4, 41, hagl_color(255, 0, 255), fnt9x18b);
+            weather_array = cJSON_GetObjectItem(current, "weather");
+            weather = cJSON_GetArrayItem(weather_array, 0);
+            printf("temp = %.2f\n", cJSON_GetObjectItem(current, "temp")->valuedouble);
 
-                    string = cJSON_Print(temp);
-                    if(string)
-                    {
-                        currentTemperature = strdup(unQuote(string));
-                        ESP_LOGI(TAG, "temperature = %s", string);
-                        char* pEnd;
-                        double tC = strtod(string, &pEnd);
-                        double tF = (tC*9/5) +32;
-                        int rh = strtol(cJSON_Print(humidity), &pEnd, 10);
-
-//                        swprintf(message, sizeof(message), L"%.*f°C %.*f°F rh: %d%%", 0, tC,0, tF, rh);
-//                        hagl_put_text(message, 4, 61, hagl_color(255, 255, 0), fnt9x18b);
-                        free(string);
-
-                        string = cJSON_Print(pressure);
-                        currentPressure = pressure->valuedouble;
-                        double pM = strtod(string, &pEnd);
-                        double pI = pM * 0.02953;
-//                        swprintf(message, sizeof(message), L"bar: %.*f mb / %.*f\"", 0, pM,0, pI);
-//                        hagl_put_text(message, 4, 101, hagl_color(255, 255, 0), fnt9x18b);
-                        free(string);
-
-                        string = cJSON_Print(dewPoint);
-                        tC = strtod(string, &pEnd);
-                        tF = (tC*9/5) +32;
-//                        swprintf(message, sizeof(message), L"dew point: %.*f°C %.*f°F", 0, tC,0, tF);
-//                        hagl_put_text(message, 4, 121, hagl_color(0, 255, 0), fnt9x18b);
-                        free(string);
-
-                        if(rain)
-                        {
-                            currentRain = rain->valuedouble;
-                            cJSON* lastHr = cJSON_GetObjectItem(rain, "1h");
-                            if(lastHr)
-                            {
-                                char *string = cJSON_Print(lastHr);
-                                ESP_LOGI(TAG, "rain %s", string);
-                                double dRain = strtod(string, &pEnd);
-//                                swprintf(message, sizeof(message), L"rain: %.2f\"", 0, dRain);
-//                                hagl_put_text(message, 4, 141, hagl_color(0, 0, 255), fnt9x18b);
-                                free(string);
-                                free(lastHr);
-                            }
-                            else{
-                                ESP_LOGI(TAG, "no rain lh");
-                            }
-                            free(rain);
-                        }
-                    else{
-                                ESP_LOGI(TAG, "no rain object");
-                        }
-                    }
-                    free(dt);
-                    free(temp);
-                    free(humidity);
-                    free(pressure);
-                    free(dewPoint);
-                }
-                if(weather_array && cJSON_IsArray(weather_array))
-                {
-                    ESP_LOGI(TAG, "weather array found.");
-                    ESP_LOGI(TAG, "weather %d items", cJSON_GetArraySize(weather_array));
-                    weather = cJSON_GetArrayItem(weather_array, 0);
-                    if(weather)
-                    {
-                        cJSON* description = cJSON_GetObjectItem(weather, "description");
-                        currentDescription = description->valuestring;
-                        cJSON* icon = cJSON_GetObjectItem(weather, "icon");
-                        char* string = cJSON_Print(description);
-//                        char16_t message[20];
-//                        swprintf(message, sizeof(message), u"%s    ", string);
-//                        hagl_put_text(message, 0, 81, hagl_color(255, 0, 0), fnt9x18b );
-                        currWeatherIcon = strdup(unQuote(cJSON_Print(icon)));
-                        ESP_LOGI(TAG, "currentWeatherIcon=%s", currWeatherIcon);
-                        free(description);
-                        free(string);
-                        free(weather);
-                        free(icon);
-                    }
-                    free(weather_array);
-                }
-                else
-                {
-                    ESP_LOGI(TAG, "weather array not found");
-                }
-                free(current);
-            }
             if(hourly)
             {
-
                 ESP_LOGI(TAG, "hourly items = %d", cJSON_GetArraySize(hourly));
-                //free(hourly);
             }
             else
             {
@@ -410,13 +297,12 @@ esp_err_t _http_event_handle(esp_http_client_event_t *evt)
             {
 
                 ESP_LOGI(TAG, "daily items = %d", cJSON_GetArraySize(daily));
-                //free(hourly);
             }
             else
             {
               ESP_LOGE(TAG, "daily not found");
             }
-#endif
+
             WHITE  = hagl_color(255,255,255);
             BLACK  = hagl_color(0,0,0);
             BLUE   = hagl_color(0,0,255);
@@ -425,35 +311,13 @@ esp_err_t _http_event_handle(esp_http_client_event_t *evt)
             YELLOW = hagl_color(244,196,48);
             GREEN  = hagl_color(0,255,0);
             RED    = hagl_color(255,0,0);
+            if(CONFIG_WEATHER_LATITUDE[0] == '-')
+                strcpy(hemisphere, "south");
 
-            Draw_Heading_Section();
-            Draw_Main_Weather_Section();     // Centre section of display for Location, temperature, Weather report, cWx Symbol and wind direction
-            Draw_3hr_Forecast(20,102, 1);    // First  3hr forecast box
-            Draw_3hr_Forecast(70,102, 2);    // Second 3hr forecast box
-            Draw_3hr_Forecast(120,102,3);    // Third  3hr forecast box
-            Draw_Astronomy_Section();        // Astronomy section Sun rise/set, Moon phase and Moon icon
-            free(root);
+            DisplayWeather();
+
+            cJSON_Delete(root);
             root = NULL;
-            if(hourly)
-            {
-                free(hourly);
-                hourly = NULL;
-            }
-            if(hourly_array)
-            {
-                free(hourly_array);
-                hourly_array = NULL;
-            }
-            if(daily)
-            {
-                free(daily);
-                daily = NULL;
-            }
-            if(daily_array)
-            {
-                free(daily_array);
-                daily_array = NULL;
-            }
             break;
         case HTTP_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
@@ -629,7 +493,7 @@ void UpdateLocalTime(){
   //Serial.println(&timeinfo, "%a %b %d %Y   %H:%M:%S"); // Displays: Saturday, June 24 2017 14:05:49
   //Serial.println(&timeinfo, "%H:%M:%S"); // Displays: 14:05:49
   char output[30], day_output[34];
-  if (strcmp(Units, "M")==0) {
+  if (Units == 'M') {
     strftime(day_output, 34, "%a  %d-%B-%Y", &timeinfo); // Creates: Sat 24-Jun-17
     strftime(output, 30, "(@ %H:%M:%S )", &timeinfo);    // Creates: 14:05:49
   }
@@ -747,6 +611,7 @@ void addsun(int x, int y, int scale) {
       }
     }
   }
+  ESP_LOGI("addSun", "end");
 }
 //#########################################################################################
 void addfog(int x, int y, int scale){
@@ -860,6 +725,7 @@ void Haze(int x, int y, int scale){
 }
 //#########################################################################################
 void Nodata(int x, int y, int scale){
+    ESP_LOGI("NoData", "scale=%d", scale);
   if (scale > Small) {
     //gfx.setFont(ArialMT_Plain_24);
     //gfx.drawString(x-10,y-18,"N/A");
@@ -873,6 +739,22 @@ void Nodata(int x, int y, int scale){
   }
   //gfx.setFont(ArialMT_Plain_10);
 }
+//#########################################################################################
+void DisplayWeather(){ // 2.9" e-paper display is 296x122 resolution
+  UpdateLocalTime();
+  Draw_Heading_Section();          // Top line of the display
+  Draw_Main_Weather_Section();     // Centre section of display for Location, temperature, Weather report, cWx Symbol and wind direction
+  Draw_3hr_Forecast(20,102, 1);    // First  3hr forecast box
+  Draw_3hr_Forecast(70,102, 2);    // Second 3hr forecast box
+  Draw_3hr_Forecast(120,102,3);    // Third  3hr forecast box
+  Draw_Astronomy_Section();        // Astronomy section Sun rise/set, Moon phase and Moon icon
+  DrawForecast(0, 131, 1);
+  DrawForecast(80, 131, 2);
+  DrawForecast(160, 131, 3);
+  DrawForecast(240, 131, 4);
+
+}
+//#########################################################################################
 
 void Draw_Heading_Section(){
     ESP_LOGI(TAG, "begin Draw_Heading_Section");
@@ -887,7 +769,6 @@ void Draw_Heading_Section(){
     ESP_ERROR_CHECK(font_render_init(&font_render_24, &font_face, 24, 48));
     ESP_ERROR_CHECK(font_render_init(&font_render_14, &font_face, 14, 48));
 
-
 //  gfx.setFont(ArialMT_Plain_16);
 //  gfx.drawString(5,15,String(City));
     render_text(CONFIG_WEATHER_CITY, &font_render_16, &driver, 5, 15, 0, 0, 0, 255);
@@ -900,39 +781,71 @@ void Draw_Heading_Section(){
 //  hagl_draw_line(0,14,296,14);
     hagl_draw_hline(0, 14, DISPLAY_WIDTH, hagl_color(0,0,0));
 }
+//#########################################################################################
 
 void Draw_Main_Weather_Section(){
     ESP_LOGI(TAG, "begin Draw_Main_Weather_Section");
   //Period-0 (Main Icon/Report)
-  DisplayWXicon(205,45,currWeatherIcon,Largesize);
+  DisplayWXicon(215,45,cJSON_GetObjectItem(weather, "icon")->valuestring,Largesize);
 //  gfx.setFont(ArialMT_Plain_24);
 //  gfx.drawString(5,32,String(WxConditions[0].Temperature,1)+"°");
-  int tl = render_text(currentTemperature, &font_render_24, &driver, 5, 32, 0, 0,0,0);
+  char temperature[8];
+  sprintf(temperature, "%.2f", cJSON_GetObjectItem(current, "temp")->valuedouble);
+  int tl = render_text(temperature, &font_render_24, &driver, 5, 32, 0, 0,0,0);
 //  gfx.setFont(ArialRoundedMTBold_14);
 //  gfx.drawString(String(WxConditions[0].Temperature,1).length()*13+8,33,(Units=="I"?"°F":"°C"));
   render_text(Units=='I'?"°F":"°C", &font_render_14, &driver, tl, 33, 0, 0,0,0);
 //  gfx.setFont(ArialMT_Plain_10);
-  DrawWind(265,42,windDir,windSpeed);
+  cJSON* wind_deg = cJSON_GetObjectItem(current, "wind_deg");
+  cJSON* wind_speed =cJSON_GetObjectItem(current, "wind_speed");
+  DrawWind(285,42,wind_deg->valueint,wind_speed->valuedouble);
 //  if (WxConditions[0].Rainfall > 0) gfx.drawString(90,35,String(WxConditions[0].Rainfall,1)+(Units=="M"?"mm":"in")+" of rain");
-  if(currentRain)
+  cJSON* rain =cJSON_GetObjectItem(current, "rain");
+  if(rain && rain->valuedouble > 0)
   {
       char text[20];
-      sprintf(text, "%.2f%s of rain", currentRain, (Units=='M'?"mm":"in"));
+      sprintf(text, "%.2f%s of rain", cJSON_GetObjectItem(current, "rain")->valuedouble, (Units=='M'?"mm":"in"));
       render_text(text, &font_render_10, &driver, 90,35, 0, 0,0,0);
   }
-  DrawPressureTrend(130,52,currentPressure,pressureTrend);
+  else
+  {
+      ESP_LOGI(TAG, "no rain");
+  }
+  cJSON* pressure = cJSON_GetObjectItem(current, "pressure");
+  if(!pressure)
+      ESP_LOGE(TAG, "no pressure");
+  float curPressure = pressure->valuedouble;
+  cJSON* hour3 = cJSON_GetArrayItem(hourly, 8);
+  if(!hour3)
+    ESP_LOGE(TAG, "No hour3");
+  cJSON* hour3_pressure = cJSON_GetObjectItem(hour3, "pressure");
+  if(hour3_pressure)
+  {
+      float futurePress = hour3_pressure->valuedouble;
+      if(curPressure < futurePress)
+          pressureTrend[0]= '+';
+      else if(curPressure > futurePress)
+          pressureTrend[0]= '-';
+      else
+          pressureTrend[0]= '0';
+  }
+  DrawPressureTrend(130,35,curPressure,pressureTrend);
 //  gfx.setFont(ArialRoundedMTBold_14);
 //  String Wx_Description = WxConditions[0].Forecast0;
-  render_text(currentDescription, &font_render_14, &driver, 130,52, 0, 0,0,0);
 //  if (WxConditions[0].Forecast1 != "") Wx_Description += " & " +  WxConditions[0].Forecast1;
 //    if (WxConditions[0].Forecast2 != "" && WxConditions[0].Forecast1 != WxConditions[0].Forecast2) Wx_Description += " & " +  WxConditions[0].Forecast2;
 //  gfx.drawString(5,59, Wx_Description);
+  render_text(cJSON_GetObjectItem(weather, "description")->valuestring, &font_render_14, &driver, 5,59, 0, 0,0,0);
 //  gfx.setFont(ArialMT_Plain_10);
+  cJSON* humidity = cJSON_GetObjectItem(current, "humidity");
+  char text[10];
+  sprintf(text, "%.1f%% rh", humidity->valuedouble);
+  render_text(text, &font_render_14, &driver, 115, 49,0, 0,0,0);
   hagl_draw_line(0,77,DISPLAY_WIDTH,77, BLACK);
 }
 //#########################################################################################
 void Draw_3hr_Forecast(int x, int y, int index){
-  cJSON* hour = cJSON_GetArrayItem(hourly, currentHour() + index*3);
+  cJSON* hour = cJSON_GetArrayItem(hourly, index*3 +8);
   int dt = cJSON_GetObjectItem(hour, "dt")->valueint + tzOffset;
   convertTime(dt);
   cJSON* weather_array = cJSON_GetObjectItem(hour, "weather");
@@ -940,10 +853,15 @@ void Draw_3hr_Forecast(int x, int y, int index){
   DisplayWXicon(x+2,y,cJSON_GetObjectItem(weather,"icon")->valuestring,Smallsize);
   //gfx.setTextAlignment(TEXT_ALIGN_CENTER);
 //  gfx.drawString(x+3,y-25,WxForecast[index].Period.substring(11,16));
-  char* text[8];
+  char* text[20];
   sprintf(text, "%d:00", getHour(convertTime(dt)));
-  render_text(text, &font_render_14, &driver, x/*+3*/-3,y-25, 0, 0,0,0);
+  render_text(text, &font_render_14, &driver, x/*+3*/-12,y-25, 0, 0,0,0);
 //  gfx.drawString(x+2,y+11,String(WxForecast[index].High,0)+"° / "+String(WxForecast[index].Low,0)+"°");
+  cJSON* prevHour = cJSON_GetArrayItem(hourly, index*3 +7);
+  cJSON* min = cJSON_GetObjectItem(prevHour, "temp");
+  cJSON* max = cJSON_GetObjectItem(hour, "temp");
+  sprintf(text, "%.0f / %.0f", min->valuedouble, max->valuedouble );
+  render_text(text, &font_render_10, &driver, x-12,y+10 , 0, 0,0,0);
   hagl_draw_line(x+28,77,x+28,129, BLACK);
   //gfx.setTextAlignment(TEXT_ALIGN_LEFT);
 }
@@ -957,22 +875,74 @@ void Draw_Astronomy_Section(){
     char tstr[10];
     format_time(tstr, sunrise + tzOffset);
     sprintf(text, "Sun Rise: %s", tstr);
-    render_text(text, &font_render_14, &driver, 152,76, 0, 0,0,0);
+    render_text(text, &font_render_14, &driver, 155,76, 0, 0,0,0);
 //  gfx.drawString(178,88,"Set: "      + ConvertUnixTime(WxConditions[0].Sunset).substring(0,5));
     format_time(tstr, sunset + tzOffset);
     sprintf(text, "  Set: %s", tstr);
-    render_text(text, &font_render_14, &driver, 178,88, 0, 0,0,0);
-//  DrawMoon(230,65,MoonDay,MoonMonth,MoonYear,Hemisphere);
+    render_text(text, &font_render_14, &driver, 181,88, 0, 0,0,0);
+    DrawMoon(250,65,MoonDay,MoonMonth,MoonYear,hemisphere);
 
 //  gfx.drawString(152,100,"Moon phase:");
+    render_text("Moon phase:", &font_render_14, &driver, 155,100, 0, 0,0,0);
 //  gfx.drawString(152,112,MoonPhase(MoonDay,MoonMonth,MoonYear));
+    render_text(MoonPhase(MoonDay,MoonMonth,MoonYear), &font_render_14, &driver, 155,112, 0, 0,0,0);
+
+    hagl_draw_hline(0, 130, DISPLAY_WIDTH, BLACK);
+}
+//#########################################################################################
+void DrawForecast(int x, int y, int dayIndex)
+{
+    cJSON* day =cJSON_GetArrayItem(daily, dayIndex);
+    time_t now = cJSON_GetObjectItem(day, "dt")->valueint + tzOffset;
+    char strftime_buf[64];
+    struct tm timeinfo;
+    //time(&now);
+    localtime_r(&now, &timeinfo);
+    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+    ESP_LOGI(TAG, "day#%d, %ld %s", dayIndex, (int)now-tzOffset, strftime_buf);
+
+    strftime(strftime_buf, sizeof(strftime_buf), "%a", &timeinfo);
+    render_text(strftime_buf, &font_render_16, &driver, x+15, y+10, 0, 0,0,0);
+    cJSON* weather_array = cJSON_GetObjectItem(day, "weather");
+    cJSON* weather = cJSON_GetArrayItem(weather_array, 0);
+    DisplayWXicon(x+35,y+50,cJSON_GetObjectItem(weather,"icon")->valuestring,Largesize);
+    cJSON* temp = cJSON_GetObjectItem(day,"temp");
+    float min = cJSON_GetObjectItem(temp, "min")->valuedouble;
+    float max = cJSON_GetObjectItem(temp, "max")->valuedouble;
+    sprintf(strftime_buf, "%.1f / %.1f", min, max);
+    render_text(strftime_buf, &font_render_14, &driver, x+4, y+70, 0, 0,0,0);
+
+    cJSON* description = cJSON_GetObjectItem(weather, "main");
+    render_text(description->valuestring, &font_render_14, &driver, x+4, y+90, 0, 0,0,0);
+    hagl_draw_vline(x+80, 130, DISPLAY_HEIGHT-130, BLACK);
+}
+//#########################################################################################
+
+int JulianDate(int d, int m, int y) {
+  int mm, yy, k1, k2, k3, j;
+  yy = y - (int)((12 - m) / 10);
+  mm = m + 9;
+  if (mm >= 12) mm = mm - 12;
+  k1 = (int)(365.25 * (yy + 4712));
+  k2 = (int)(30.6001 * mm + 0.5);
+  k3 = (int)((int)((yy / 100) + 49) * 0.75) - 38;
+  // 'j' for dates in Julian calendar:
+  j = k1 + k2 + d + 59 + 1;
+  if (j > 2299160) j = j - k3; // 'j' is the Julian date at 12h UT (Universal Time) For Gregorian calendar:
+  return j;
+}
+double NormalizedMoonPhase(int d, int m, int y) {
+  int j = JulianDate(d, m, y);
+  //Calculate the approximate phase of the moon
+  double Phase = (j + 4.867) / 29.53059;
+  return (Phase - (int) Phase);
 }
 //#########################################################################################
 void DrawMoon(int x, int y, int dd, int mm, int yy, char* hemisphere) {
-#if 0
+    ESP_LOGI(TAG, "DrawMoon");
   int diameter = 38;
   float Xpos, Ypos, Rpos, Xpos1, Xpos2;
-  gfx.setColor(EPD_BLACK);
+  //gfx.setColor(EPD_BLACK);
   for (Ypos = 0; Ypos <= 45; Ypos++) {
     Xpos = sqrt(45 * 45 - Ypos * Ypos);
     // Draw dark part of moon
@@ -989,7 +959,7 @@ void DrawMoon(int x, int y, int dd, int mm, int yy, char* hemisphere) {
     hagl_draw_line(pB3x, pB3y, pB4x, pB4y, BLACK);
     // Determine the edges of the lighted part of the moon
     double Phase = NormalizedMoonPhase(dd, mm, yy);
-    if (hemisphere == "south") Phase = 1 - Phase;
+    if (strcmp(hemisphere, "south")!=0) Phase = 1 - Phase;
     Rpos = 2 * Xpos;
     if (Phase < 0.5) {
       Xpos1 = - Xpos;
@@ -1012,13 +982,11 @@ void DrawMoon(int x, int y, int dd, int mm, int yy, char* hemisphere) {
     hagl_draw_line(pW1x, pW1y, pW2x, pW2y, WHITE);
     hagl_draw_line(pW3x, pW3y, pW4x, pW4y, WHITE);
   }
-  gfx.setColor(EPD_BLACK);
-  gfx.drawCircle(x + diameter - 1, y + diameter, diameter / 2 + 1);
-#endif
+  //gfx.setColor(EPD_BLACK);
+  hagl_draw_circle(x + diameter - 1, y + diameter, diameter / 2 + 1,BLACK);
 }
 //#########################################################################################
 char* MoonPhase(int d, int m, int y) {
-#if 0
   const double Phase = NormalizedMoonPhase(d, m, y);
   int b = (int)(Phase * 8 + 0.5) % 8;
   if (b == 0) return "New";              // New; 0% illuminated
@@ -1027,9 +995,8 @@ char* MoonPhase(int d, int m, int y) {
   if (b == 3) return "Waxing gibbous";   // Waxing gibbous; 75% illuminated
   if (b == 4) return "Full";             // Full; 100% illuminated
   if (b == 5) return "Waning gibbous";   // Waning gibbous; 75% illuminated
-  if (b == 6) return "Third quarter";     // Last quarter; 50% illuminated
+  if (b == 6) return "Third quarter";    // Last quarter; 50% illuminated
   if (b == 7) return "Waning crescent";  // Waning crescent; 25% illuminated
-#endif
   return "";
 }
 //#########################################################################################
@@ -1076,8 +1043,8 @@ void DrawWind(int x, int y, float angle, float windspeed){
   //gfx.setFont(ArialMT_Plain_10);
   //gfx.drawString(x,y-Cradius-14,String(windspeed,1)+(Units=="M"?" m/s":" mph"));
   char message[20];
-  sprintf(message,"%.1f%s",windSpeed, Units=='M'?" m/s":" mph");
-  render_text(message, &font_render_10, &driver, x,y-Cradius-14, 0, 0,0,0);
+  sprintf(message,"%.1f%s",cJSON_GetObjectItem(current, "wind_speed")->valuedouble, Units=='M'?" m/s":" mph");
+  render_text(message, &font_render_10, &driver, x-10,y-Cradius-14, 0, 0,0,0);
   //gfx.setTextAlignment(TEXT_ALIGN_LEFT);
 }
 //#########################################################################################
@@ -1124,14 +1091,16 @@ void arrow(int x, int y, int asize, float aangle, int pwidth, int plength){
 }
 //#########################################################################################
 void DrawPressureTrend(int x, int y, float pressure, char* slope){
+    ESP_LOGI(TAG, "DrawPressureTrend %.1f %s", pressure, slope);
     char text[20];
-    sprintf(text, "%.2f%s", pressure, (Units=='M'?"mb":"in"));
+    sprintf(text, "%.2f %s", pressure, (Units=='M'?"mb":"in"));
   //gfx.drawString(90,47,String(pressure,1)+(Units=="M"?"mb":"in"));
-    render_text(text, &font_render_10, &driver, 90,47,0, 0,0,0);
-  x = x + 8;
+    int x1 =render_text(text, &font_render_14, &driver, x-20,y-5,0, 0,0,0);
+  //x = x + 8;
+    x =x1;
   if      (slope == '+') {
     hagl_draw_line(x,  y,  x+4,y-4, GREEN);
-    hagl_draw_line(x+4,y-4,x+8,y, GREEN);
+    hagl_draw_line(x+4,y-4, x+8, y, GREEN);
   }
   else if (slope == '0') {
     hagl_draw_line(x+3,y-4,x+8,y, GREEN);
@@ -1139,18 +1108,13 @@ void DrawPressureTrend(int x, int y, float pressure, char* slope){
   }
   else if (slope == '-') {
     hagl_draw_line(x,  y,  x+4,y+4, GREEN);
-    hagl_draw_line(x+4,y+4,x+8,y, GREEN);
+    hagl_draw_line(x+4,y+4, x+8, y, GREEN);
   }
 }
 //#########################################################################################
 void DisplayWXicon(int x, int y, char* iconName, bool LargeSize){
-//  iconName.toLowerCase(); IconName.trim();
-//    for(int i = 0; iconName[i]; i++){
-//      iconName[i] = tolower(iconName[i]);
-//    }
-//  Serial.println(IconName);
     ESP_LOGI("DisplayWXicon", "iconName=%s ",iconName);
-  if      (!strcmp(iconName, "01d") || !strcmp(iconName, "01n"))
+  if(!strcmp(iconName, "01d") || !strcmp(iconName, "01n"))
       if (LargeSize) Sunny(x,y,Large); else Sunny(x,y,Small);
   else if (!strcmp(iconName, "02d") || !strcmp(iconName, "02n"))
       if (LargeSize) MostlySunny(x,y,Large); else MostlySunny(x,y,Small);
@@ -1173,8 +1137,9 @@ void DisplayWXicon(int x, int y, char* iconName, bool LargeSize){
   else if (!strcmp(iconName, "probrain"))
       if (LargeSize) ProbRain(x,y,Large); else ProbRain(x,y,Small);
   else if (LargeSize) Nodata(x,y,Large); else Nodata(x,y,Small);
-}
 
+  ESP_LOGI("DisplayWXicon", "end");
+}
 int currentHour()
 {
     time_t now;
@@ -1349,6 +1314,8 @@ void app_main()
     setup_Gpio();
 
     ESP_ERROR_CHECK(font_face_init(&font_face, ttf_start, ttf_end - ttf_start - 1));
+    //ESP_ERROR_CHECK(font_face_init(&font_face_B, ttf_start_B, ttf_end_B - ttf_start_B - 1));
+
 
 #ifdef HAGL_HAL_USE_BUFFERING
     xTaskCreatePinnedToCore(flush_task, "Flush", 4096, NULL, 1, NULL, 0);
