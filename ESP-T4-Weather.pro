@@ -299,7 +299,9 @@
 			kconfig_bin/zconf.hash.c \
 			kconfig_bin/zconf.lex.c \
 			kconfig_bin/zconf.tab.c \
-			components/font_render/freetype2/src/gzip/zutil.c 
+			components/font_render/freetype2/src/gzip/zutil.c \ 
+    components/hagl_hal/src/hagl_hal_triple.c \
+    components/hagl_hal/src/mipi_display.c
 
 	HEADERS += \
 			components/font_render/freetype2/src/autofit/afangles.h \
