@@ -198,20 +198,6 @@ uint8_t hagl_put_glyph(bitmap_t glyph, int16_t x0, int16_t y0, color_t color)
     return glyph.width;
 }
 
-char * unQuote(char* str)
-{
-    int len = strlen(str);
-    if(str[0] == '"')
-    {
-        if(str[len-1] == '"')
-        {
-            str[len-1] = 0;
-            return str +1;
-        }
-    }
-    return str;
-}
-
 //  draw rectangle specified by x, y, width & height
 void hagl_draw_rect_wh(int x, int y, int w, int h, color_t c)
 {

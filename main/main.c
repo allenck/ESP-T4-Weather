@@ -69,6 +69,7 @@ SPDX-License-Identifier: MIT-0
 #include "esp_heap_caps_init.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
+#include "rgb565.h"
 
 /* The event group allows multiple bits for each event, but we only care about two events:
  * - we are connected to the AP with an IP
@@ -201,7 +202,6 @@ static void gpio_task(void* arg)
             {
             }
         }
-
     }
 }
 
@@ -303,16 +303,7 @@ esp_err_t _http_event_handle(esp_http_client_event_t *evt)
               ESP_LOGE(TAG, "daily not found");
             }
 
-            WHITE  = hagl_color(255,255,255);
-            BLACK  = hagl_color(0,0,0);
-            BLUE   = hagl_color(0,0,255);
-            LTGRAY = hagl_color(200,200,200);
-            ORANGE = hagl_color(255,127,0);
-            YELLOW = hagl_color(244,196,48);
-            GREEN  = hagl_color(0,255,0);
-            RED    = hagl_color(255,0,0);
-            if(CONFIG_WEATHER_LATITUDE[0] == '-')
-                strcpy(hemisphere, "south");
+
 
             DisplayWeather();
 
@@ -395,7 +386,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         connected = true;
 
-        //hagl_fill_rectangle(70,50,170, 150, 0); // erase completely
+        hagl_clear_screen();
 
         if(!time_display_started)
         {
@@ -465,7 +456,10 @@ void main_task(void *params)
     vTaskDelete(NULL);
 }
 
-static int render_text(const char *text, font_render_t *render, hagl_driver_t *driver, int src_x, int src_y, int y, uint8_t color_r, uint8_t color_g, uint8_t color_b) {
+
+static int render_text(const char *text, font_render_t *render, hagl_driver_t *driver, int src_x, int src_y, int y, color_t color) {
+    color_t c = color;
+    rgb_t rgb = rgb565_to_rgb888(&c);
     if (src_y - y >= BUFFER_SIZE || src_y + (int)render->max_pixel_height - y < 0) {
         return 0;
     }
@@ -475,13 +469,14 @@ static int render_text(const char *text, font_render_t *render, hagl_driver_t *d
         const char c = *text;
         text += u8_decode(&glyph, text);
         font_render_glyph(render, glyph);
-        hagl_draw_gray2_bitmap(render->bitmap, driver->current_buffer, color_r, color_g, color_b, src_x + render->bitmap_left,
+        hagl_draw_gray2_bitmap(render->bitmap, driver->current_buffer, rgb.r, rgb.g, rgb.b, src_x + render->bitmap_left,
                                render->max_pixel_height - render->origin - render->bitmap_top + src_y - y,
                                render->bitmap_width, render->bitmap_height, driver->display_width, /*BUFFER_SIZE*/driver->display_height);
         src_x += render->advance;
     }
     return src_x;
 }
+
 
 //#########################################################################################
 void UpdateLocalTime(){
@@ -729,13 +724,13 @@ void Nodata(int x, int y, int scale){
   if (scale > Small) {
     //gfx.setFont(ArialMT_Plain_24);
     //gfx.drawString(x-10,y-18,"N/A");
-      render_text("N/A", &font_render_24, &driver, x-10,y-18, 0, 0,0,0);
+      render_text("N/A", &font_render_24, &driver, x-10,y-18, 0, BLACK);
   }
   else
   {
     //gfx.setFont(ArialMT_Plain_10);
     //gfx.drawString(x-8,y-8,"N/A");
-      render_text("N/A", &font_render_10, &driver, x-8,y-8, 0, 0,0,0);
+      render_text("N/A", &font_render_10, &driver, x-8,y-8, 0, BLACK);
   }
   //gfx.setFont(ArialMT_Plain_10);
 }
@@ -759,27 +754,19 @@ void DisplayWeather(){ // 2.9" e-paper display is 296x122 resolution
 void Draw_Heading_Section(){
     ESP_LOGI(TAG, "begin Draw_Heading_Section");
     hagl_clear_screen_to_color(WHITE);
-    driver.current_buffer = &WHITE;
-    driver.display_width = DISPLAY_WIDTH;
-    driver.display_height = DISPLAY_HEIGHT;
-    driver.buffer_size = DISPLAY_WIDTH * (DISPLAY_DEPTH / 8) * DISPLAY_HEIGHT;
-    driver.bitmap = NULL;
-    ESP_ERROR_CHECK(font_render_init(&font_render_10, &font_face, 10, 48));
-    ESP_ERROR_CHECK(font_render_init(&font_render_16, &font_face, 16, 48));
-    ESP_ERROR_CHECK(font_render_init(&font_render_24, &font_face, 24, 48));
-    ESP_ERROR_CHECK(font_render_init(&font_render_14, &font_face, 14, 48));
+
 
 //  gfx.setFont(ArialMT_Plain_16);
 //  gfx.drawString(5,15,String(City));
-    render_text(CONFIG_WEATHER_CITY, &font_render_16, &driver, 5, 15, 0, 0, 0, 255);
+    render_text(CONFIG_WEATHER_CITY, &font_render_16, &driver, 5, 15, 0, GREEN);
     //hagl_blit(0,0,&bm);
 //  gfx.setFont(ArialMT_Plain_10);
 //  gfx.drawString(5,0,time_str);
-    render_text(time_str, &font_render_10, &driver, 5, 0, 0, 0,0,0);
+    render_text(time_str, &font_render_10, &driver, 5, 0, 0, BLACK);
 //  gfx.drawString(185,0,Day_time_str);
-    render_text(Day_time_str, &font_render_10, &driver, 190, 0, 0, 0,0,0);
+    render_text(Day_time_str, &font_render_10, &driver, 190, 0, 0, BLACK);
 //  hagl_draw_line(0,14,296,14);
-    hagl_draw_hline(0, 14, DISPLAY_WIDTH, hagl_color(0,0,0));
+    hagl_draw_hline(0, 14, DISPLAY_WIDTH, BLACK);
 }
 //#########################################################################################
 
@@ -791,10 +778,10 @@ void Draw_Main_Weather_Section(){
 //  gfx.drawString(5,32,String(WxConditions[0].Temperature,1)+"°");
   char temperature[8];
   sprintf(temperature, "%.2f", cJSON_GetObjectItem(current, "temp")->valuedouble);
-  int tl = render_text(temperature, &font_render_24, &driver, 5, 32, 0, 0,0,0);
+  int tl = render_text(temperature, &font_render_24, &driver, 5, 32, 0, BLACK);
 //  gfx.setFont(ArialRoundedMTBold_14);
 //  gfx.drawString(String(WxConditions[0].Temperature,1).length()*13+8,33,(Units=="I"?"°F":"°C"));
-  render_text(Units=='I'?"°F":"°C", &font_render_14, &driver, tl, 33, 0, 0,0,0);
+  render_text(Units=='I'?"°F":"°C", &font_render_14, &driver, tl, 33, 0, BLACK);
 //  gfx.setFont(ArialMT_Plain_10);
   cJSON* wind_deg = cJSON_GetObjectItem(current, "wind_deg");
   cJSON* wind_speed =cJSON_GetObjectItem(current, "wind_speed");
@@ -805,7 +792,7 @@ void Draw_Main_Weather_Section(){
   {
       char text[20];
       sprintf(text, "%.2f%s of rain", cJSON_GetObjectItem(current, "rain")->valuedouble, (Units=='M'?"mm":"in"));
-      render_text(text, &font_render_10, &driver, 90,35, 0, 0,0,0);
+      render_text(text, &font_render_10, &driver, 90,35, 0, BLACK);
   }
   else
   {
@@ -835,12 +822,12 @@ void Draw_Main_Weather_Section(){
 //  if (WxConditions[0].Forecast1 != "") Wx_Description += " & " +  WxConditions[0].Forecast1;
 //    if (WxConditions[0].Forecast2 != "" && WxConditions[0].Forecast1 != WxConditions[0].Forecast2) Wx_Description += " & " +  WxConditions[0].Forecast2;
 //  gfx.drawString(5,59, Wx_Description);
-  render_text(cJSON_GetObjectItem(weather, "description")->valuestring, &font_render_14, &driver, 5,59, 0, 0,0,0);
+  render_text(cJSON_GetObjectItem(weather, "description")->valuestring, &font_render_14, &driver, 5,59, 0, BLACK);
 //  gfx.setFont(ArialMT_Plain_10);
   cJSON* humidity = cJSON_GetObjectItem(current, "humidity");
   char text[10];
   sprintf(text, "%.1f%% rh", humidity->valuedouble);
-  render_text(text, &font_render_14, &driver, 115, 49,0, 0,0,0);
+  render_text(text, &font_render_14, &driver, 115, 49,0, BLACK);
   hagl_draw_line(0,77,DISPLAY_WIDTH,77, BLACK);
 }
 //#########################################################################################
@@ -855,13 +842,13 @@ void Draw_3hr_Forecast(int x, int y, int index){
 //  gfx.drawString(x+3,y-25,WxForecast[index].Period.substring(11,16));
   char* text[20];
   sprintf(text, "%d:00", getHour(convertTime(dt)));
-  render_text(text, &font_render_14, &driver, x/*+3*/-12,y-25, 0, 0,0,0);
+  render_text(text, &font_render_14, &driver, x/*+3*/-12,y-25, 0, BLACK);
 //  gfx.drawString(x+2,y+11,String(WxForecast[index].High,0)+"° / "+String(WxForecast[index].Low,0)+"°");
   cJSON* prevHour = cJSON_GetArrayItem(hourly, index*3 +7);
   cJSON* min = cJSON_GetObjectItem(prevHour, "temp");
   cJSON* max = cJSON_GetObjectItem(hour, "temp");
   sprintf(text, "%.0f / %.0f", min->valuedouble, max->valuedouble );
-  render_text(text, &font_render_10, &driver, x-12,y+10 , 0, 0,0,0);
+  render_text(text, &font_render_10, &driver, x-12,y+10 , 0, BLACK);
   hagl_draw_line(x+28,77,x+28,129, BLACK);
   //gfx.setTextAlignment(TEXT_ALIGN_LEFT);
 }
@@ -873,19 +860,19 @@ void Draw_Astronomy_Section(){
     long sunset = cJSON_GetObjectItem(today, "sunset")->valueint;
     char text[20];
     char tstr[10];
-    format_time(tstr, sunrise + tzOffset);
+    format_time(tstr, sunrise/* + tzOffset*/);
     sprintf(text, "Sun Rise: %s", tstr);
-    render_text(text, &font_render_14, &driver, 155,76, 0, 0,0,0);
+    render_text(text, &font_render_14, &driver, 155,76, 0, BLACK);
 //  gfx.drawString(178,88,"Set: "      + ConvertUnixTime(WxConditions[0].Sunset).substring(0,5));
-    format_time(tstr, sunset + tzOffset);
+    format_time(tstr, sunset /*+ tzOffset*/);
     sprintf(text, "  Set: %s", tstr);
-    render_text(text, &font_render_14, &driver, 181,88, 0, 0,0,0);
+    render_text(text, &font_render_14, &driver, 181,88, 0, BLACK);
     DrawMoon(250,65,MoonDay,MoonMonth,MoonYear,hemisphere);
 
 //  gfx.drawString(152,100,"Moon phase:");
-    render_text("Moon phase:", &font_render_14, &driver, 155,100, 0, 0,0,0);
+    render_text("Moon phase:", &font_render_14, &driver, 155,100, 0, BLACK);
 //  gfx.drawString(152,112,MoonPhase(MoonDay,MoonMonth,MoonYear));
-    render_text(MoonPhase(MoonDay,MoonMonth,MoonYear), &font_render_14, &driver, 155,112, 0, 0,0,0);
+    render_text(MoonPhase(MoonDay,MoonMonth,MoonYear), &font_render_14, &driver, 155,112, 0, BLACK);
 
     hagl_draw_hline(0, 130, DISPLAY_WIDTH, BLACK);
 }
@@ -902,7 +889,7 @@ void DrawForecast(int x, int y, int dayIndex)
     ESP_LOGI(TAG, "day#%d, %ld %s", dayIndex, (int)now-tzOffset, strftime_buf);
 
     strftime(strftime_buf, sizeof(strftime_buf), "%a", &timeinfo);
-    render_text(strftime_buf, &font_render_16, &driver, x+15, y+10, 0, 0,0,0);
+    render_text(strftime_buf, &font_render_16, &driver, x+15, y+10, 0, BLACK);
     cJSON* weather_array = cJSON_GetObjectItem(day, "weather");
     cJSON* weather = cJSON_GetArrayItem(weather_array, 0);
     DisplayWXicon(x+35,y+50,cJSON_GetObjectItem(weather,"icon")->valuestring,Largesize);
@@ -910,10 +897,10 @@ void DrawForecast(int x, int y, int dayIndex)
     float min = cJSON_GetObjectItem(temp, "min")->valuedouble;
     float max = cJSON_GetObjectItem(temp, "max")->valuedouble;
     sprintf(strftime_buf, "%.1f / %.1f", min, max);
-    render_text(strftime_buf, &font_render_14, &driver, x+4, y+70, 0, 0,0,0);
+    render_text(strftime_buf, &font_render_14, &driver, x+4, y+70, 0, BLACK);
 
     cJSON* description = cJSON_GetObjectItem(weather, "main");
-    render_text(description->valuestring, &font_render_14, &driver, x+4, y+90, 0, 0,0,0);
+    render_text(description->valuestring, &font_render_14, &driver, x+4, y+90, 0, BLACK);
     hagl_draw_vline(x+80, 130, DISPLAY_HEIGHT-130, BLACK);
 }
 //#########################################################################################
@@ -1039,12 +1026,12 @@ void DrawWind(int x, int y, float angle, float windspeed){
   //gfx.setFont(ArialRoundedMTBold_14);
   //gfx.drawString(x,y+Cradius+3,WindDegToDirection(angle));
   //font_render_14.pixel_size++;
-  render_text(WindDegToDirection(angle), &font_render_14, &driver, x,y+Cradius+3, 0, 0,0,0);
+  render_text(WindDegToDirection(angle), &font_render_14, &driver, x,y+Cradius+3, 0, BLACK);
   //gfx.setFont(ArialMT_Plain_10);
   //gfx.drawString(x,y-Cradius-14,String(windspeed,1)+(Units=="M"?" m/s":" mph"));
   char message[20];
   sprintf(message,"%.1f%s",cJSON_GetObjectItem(current, "wind_speed")->valuedouble, Units=='M'?" m/s":" mph");
-  render_text(message, &font_render_10, &driver, x-10,y-Cradius-14, 0, 0,0,0);
+  render_text(message, &font_render_10, &driver, x-10,y-Cradius-14, 0, BLACK);
   //gfx.setTextAlignment(TEXT_ALIGN_LEFT);
 }
 //#########################################################################################
@@ -1095,7 +1082,7 @@ void DrawPressureTrend(int x, int y, float pressure, char* slope){
     char text[20];
     sprintf(text, "%.2f %s", pressure, (Units=='M'?"mb":"in"));
   //gfx.drawString(90,47,String(pressure,1)+(Units=="M"?"mb":"in"));
-    int x1 =render_text(text, &font_render_14, &driver, x-20,y-5,0, 0,0,0);
+    int x1 =render_text(text, &font_render_14, &driver, x-20,y-5,0, BLACK);
   //x = x + 8;
     x = x1 +4;
   if(slope[0] == '+') {
@@ -1275,6 +1262,11 @@ void wifi_init_softap(void *params)
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
+    char text[50];
+    sprintf(text, "logging on to WiFi %s", CONFIG_ESP_WIFI_SSID);
+    driver.current_buffer = &BLACK;
+    render_text(text, &font_render_16, &driver, 5, 100, 0, WHITE);
+    driver.current_buffer = &WHITE;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
@@ -1303,19 +1295,37 @@ void app_main()
     ESP_LOGI(TAG, "Heap when starting: %d", esp_get_free_heap_size());
     event = xEventGroupCreate();
 
-    /* Save the backbuffer pointer so we can later read() directly into it. */
     hagl_init();
-    hagl_driver_t display = {
-            .display_width = DISPLAY_WIDTH,
-            .display_height = DISPLAY_HEIGHT,
-            .buffer_size = BUFFER_SIZE * DISPLAY_WIDTH	// 2 buffers with 20 lines
-    };
-
-    setup_Gpio();
+//    hagl_driver_t display = {
+//            .display_width = DISPLAY_WIDTH,
+//            .display_height = DISPLAY_HEIGHT,
+//            .buffer_size = BUFFER_SIZE * DISPLAY_WIDTH	// 2 buffers with 20 lines
+//    };
+    WHITE  = hagl_color(255,255,255);
+    BLACK  = hagl_color(0,0,0);
+    BLUE   = hagl_color(0,0,255);
+    LTGRAY = hagl_color(200,200,200);
+    ORANGE = hagl_color(255,127,0);
+    YELLOW = hagl_color(244,196,48);
+    GREEN  = hagl_color(0,255,0);
+    RED    = hagl_color(255,0,0);
+    if(CONFIG_WEATHER_LATITUDE[0] == '-')
+        strcpy(hemisphere, "south");
+    driver.current_buffer = &WHITE;
+    driver.display_width = DISPLAY_WIDTH;
+    driver.display_height = DISPLAY_HEIGHT;
+    driver.buffer_size = DISPLAY_WIDTH * (DISPLAY_DEPTH / 8) * DISPLAY_HEIGHT;
+    driver.bitmap = NULL;
 
     ESP_ERROR_CHECK(font_face_init(&font_face, ttf_start, ttf_end - ttf_start - 1));
     //ESP_ERROR_CHECK(font_face_init(&font_face_B, ttf_start_B, ttf_end_B - ttf_start_B - 1));
 
+    ESP_ERROR_CHECK(font_render_init(&font_render_10, &font_face, 10, 48));
+    ESP_ERROR_CHECK(font_render_init(&font_render_16, &font_face, 16, 48));
+    ESP_ERROR_CHECK(font_render_init(&font_render_24, &font_face, 24, 48));
+    ESP_ERROR_CHECK(font_render_init(&font_render_14, &font_face, 14, 48));
+
+    setup_Gpio();
 
 #ifdef HAGL_HAL_USE_BUFFERING
     xTaskCreatePinnedToCore(flush_task, "Flush", 4096, NULL, 1, NULL, 0);

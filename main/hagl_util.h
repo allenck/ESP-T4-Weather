@@ -82,7 +82,6 @@ void hagl_draw_gray2_bitmap(uint8_t *src_buf, color_t *target_buf, uint8_t r, ui
 
 uint8_t hagl_put_glyph(bitmap_t glyph, int16_t x0, int16_t y0, color_t color);
 
-char * unQuote(char* str);
 void hagl_draw_rect_wh(int x, int y, int w, int h, color_t c);
 void hagl_fill_rect_wh(int x, int y, int w, int h, color_t c);
 
