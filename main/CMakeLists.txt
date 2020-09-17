@@ -10,7 +10,7 @@ idf_component_register(
 	"hagl_util.c"
 	INCLUDE_DIRS
 	"."
-	EMBED_TXTFILES "Ubuntu-R.ttf"
+        EMBED_TXTFILES "Ubuntu-R.ttf"
 )
 set(COMPONENT_ADD_INCLUDEDIRS "")
 

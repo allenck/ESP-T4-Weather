@@ -829,7 +829,7 @@ void Draw_Main_Weather_Section(){
       else
           pressureTrend[0]= '0';
   }
-  DrawPressureTrend(130,35,curPressure,pressureTrend);
+  DrawPressureTrend(110,35,curPressure,pressureTrend);
 //  gfx.setFont(ArialRoundedMTBold_14);
 //  String Wx_Description = WxConditions[0].Forecast0;
 //  if (WxConditions[0].Forecast1 != "") Wx_Description += " & " +  WxConditions[0].Forecast1;
@@ -1097,18 +1097,18 @@ void DrawPressureTrend(int x, int y, float pressure, char* slope){
   //gfx.drawString(90,47,String(pressure,1)+(Units=="M"?"mb":"in"));
     int x1 =render_text(text, &font_render_14, &driver, x-20,y-5,0, 0,0,0);
   //x = x + 8;
-    x =x1;
-  if      (slope == '+') {
-    hagl_draw_line(x,  y,  x+4,y-4, GREEN);
-    hagl_draw_line(x+4,y-4, x+8, y, GREEN);
+    x = x1 +4;
+  if(slope[0] == '+') {
+    hagl_draw_line(x,  y,  x+4,y-4, BLACK);
+    hagl_draw_line(x+4,y-4, x+8, y, BLACK);
   }
-  else if (slope == '0') {
-    hagl_draw_line(x+3,y-4,x+8,y, GREEN);
-    hagl_draw_line(x+3,y+4,x+8,y, GREEN);
+  else if (slope[0] == '0') {
+    hagl_draw_line(x+3,y-4,x+8,y, BLACK);
+    hagl_draw_line(x+3,y+4,x+8,y, BLACK);
   }
-  else if (slope == '-') {
-    hagl_draw_line(x,  y,  x+4,y+4, GREEN);
-    hagl_draw_line(x+4,y+4, x+8, y, GREEN);
+  else if (slope[0] == '-') {
+    hagl_draw_line(x,  y,  x+4,y+4, BLACK);
+    hagl_draw_line(x+4,y+4, x+8, y, BLACK);
   }
 }
 //#########################################################################################
