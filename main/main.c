@@ -976,7 +976,9 @@ void DrawMoon(int x, int y, int dd, int mm, int yy, char* hemisphere) {
 //#########################################################################################
 char* MoonPhase(int d, int m, int y) {
   const double Phase = NormalizedMoonPhase(d, m, y);
-  int b = (int)(Phase * 8 + 0.5) % 8;
+  ESP_LOGI(TAG, "Moon phase %.2f", Phase);
+  //int b = (int)(Phase * 8 + 0.5) % 8;
+  int b = (int)((Phase + 0.5)* 8 ) % 8;
   if (b == 0) return "New";              // New; 0% illuminated
   if (b == 1) return "Waxing crescent";  // Waxing crescent; 25% illuminated
   if (b == 2) return "First quarter";    // First quarter; 50% illuminated
