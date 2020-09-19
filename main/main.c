@@ -918,6 +918,7 @@ int JulianDate(int d, int m, int y) {
   if (j > 2299160) j = j - k3; // 'j' is the Julian date at 12h UT (Universal Time) For Gregorian calendar:
   return j;
 }
+
 double NormalizedMoonPhase(int d, int m, int y) {
   int j = JulianDate(d, m, y);
   //Calculate the approximate phase of the moon
@@ -946,7 +947,7 @@ void DrawMoon(int x, int y, int dd, int mm, int yy, char* hemisphere) {
     hagl_draw_line(pB3x, pB3y, pB4x, pB4y, BLACK);
     // Determine the edges of the lighted part of the moon
     double Phase = NormalizedMoonPhase(dd, mm, yy);
-    if (strcmp(hemisphere, "south")!=0) Phase = 1 - Phase;
+    if (strcmp(hemisphere, "south")==0) Phase = 1 - Phase;
     Rpos = 2 * Xpos;
     if (Phase < 0.5) {
       Xpos1 = - Xpos;
@@ -1154,6 +1155,10 @@ void format_time(char *dest, time_t time)
     char strftime_buf[64];
     strftime(strftime_buf, sizeof(strftime_buf),"%H:%M", &timeinfo);
     strcpy(dest, strftime_buf);
+
+    MoonDay   = timeinfo.tm_mday;
+    MoonMonth = timeinfo.tm_mon +1;
+    MoonYear  = timeinfo.tm_year +1900;
 }
 
 time_t convertTime(long dt)
